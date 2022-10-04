@@ -21,7 +21,8 @@ library(scater)
   images = "lowres", # specify which image(s) to include
   load = TRUE))      # specify whether or not to load image(s)
 
-head(rowData(spe)) #only has character column
+head(rowData(spe)) #only has symbol column (analogous to gene_name), does not have feature_type
+head(colData(spe)) #does not have cell count column or ground truth column (ground truth probably not necessary?)
 
 plotSpots(spe)
 

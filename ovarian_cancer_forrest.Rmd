@@ -1,0 +1,111 @@
+---
+title: "ds_proj"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r spe}
+
+library(SpatialExperiment)
+library(ggspavis)
+library(scater)
+
+
+(spe <- read10xVisium("/users/kshah/ovarian_cancer_forrest/outs/",
+  type = "sparse",   # use sparse (not HDF5) format
+  data = "filtered",      # read all (not filtered) data
+  images = "lowres", # specify which image(s) to include
+  load = TRUE))      # specify whether or not to load image(s)
+
+head(rowData(spe)) #only has character column
+
+plotSpots(spe)
+
+is_mito <- grepl("(^MT-)|(^mt-)", rowData(spe)$symbol)
+table(is_mito)
+rowData(spe)$symbol[is_mito]
+spe <- addPerCellQC(spe, subsets = list(mito = is_mito))
+head(colData(spe))
+hist(colData(spe)$subsets_mito_percent, breaks = 20)
+qc_mito <- colData(spe)$subsets_mito_percent > 28 #none
+table(qc_mito)
+
+hist(colData(spe)$sum, breaks = 20)
+#plotQC(spe, type = "scatter", 
+#       metric_x = "cell_count", metric_y = "sum",  there is no cell count col, so can't
+#       threshold_y = 600)
+
+qc_lib_size <- colData(spe)$sum < 600
+table(qc_lib_size)
+colData(spe)$qc_lib_size <- qc_lib_size
+plotQC(spe, type = "spots", 
+       discard = "qc_lib_size")
+
+hist(colData(spe)$detected, breaks = 20)
+qc_detected <- colData(spe)$detected < 400
+table(qc_detected)
+colData(spe)$qc_detected <- qc_detected
+plotQC(spe, type = "spots", 
+       discard = "qc_detected")
+
+#cannot do number of cells per spot QC because there is no cell count col
+
+apply(cbind(qc_lib_size, qc_detected, qc_mito), 2, sum)
+
+discard <- qc_lib_size | qc_detected | qc_mito
+table(discard)
+
+plotQC(spe, type = "spots", 
+       discard = "discard")
+
+#spe <- spe[, !colData(spe)$discard] this does not work for some reason, but the genes are the same for lib size and detected, so i just removed them
+
+spe <- spe[, !colData(spe)$qc_lib_size]
+dim(spe)
+```
+
+```{r pressure}
+library(scran)
+
+# calculate library size factors
+spe <- computeLibraryFactors(spe)
+summary(sizeFactors(spe))
+hist(sizeFactors(spe), breaks = 20)
+
+# calculate logcounts and store in object
+spe <- logNormCounts(spe)
+
+# check
+assayNames(spe)
+dim(logcounts(spe))
+```
+
+
+```{r hvgs}
+
+# fit mean-variance relationship
+dec <- modelGeneVar(spe)
+
+# remove mitochondrial genes
+spe <- spe[!is_mito, ]
+dim(spe)
+
+# visualize mean-variance relationship
+fit <- metadata(dec)
+plot(fit$mean, fit$var, 
+     xlab = "mean of log-expression", ylab = "variance of log-expression")
+curve(fit$trend(x), col = "dodgerblue", add = TRUE, lwd = 2)
+
+# select top HVGs
+top_hvgs <- getTopHVGs(dec, prop = 0.1)
+length(top_hvgs) #1300 
+```
+
+
+
+
+

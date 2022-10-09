@@ -10,6 +10,8 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ```{r spe}
 
+#DOWNLOADING
+
 library(SpatialExperiment)
 library(ggspavis)
 library(scater)
@@ -21,8 +23,18 @@ library(scater)
   images = "lowres", # specify which image(s) to include
   load = TRUE))      # specify whether or not to load image(s)
 
+assayNames(spe)
+
 head(rowData(spe)) #only has symbol column (analogous to gene_name), does not have feature_type
-head(colData(spe)) #does not have cell count column or ground truth column (ground truth probably not necessary?)
+head(colData(spe)) #does not have cell count column because cell segmentation was not done
+
+head(spatialCoords(spe))
+
+```
+
+```{r qc}
+
+#QUALITY CONTROL
 
 plotSpots(spe)
 
@@ -36,9 +48,6 @@ qc_mito <- colData(spe)$subsets_mito_percent > 28 #none
 table(qc_mito)
 
 hist(colData(spe)$sum, breaks = 20)
-#plotQC(spe, type = "scatter", 
-#       metric_x = "cell_count", metric_y = "sum",  there is no cell count col, so can't
-#       threshold_y = 600)
 
 qc_lib_size <- colData(spe)$sum < 600
 table(qc_lib_size)
@@ -53,8 +62,6 @@ colData(spe)$qc_detected <- qc_detected
 plotQC(spe, type = "spots", 
        discard = "qc_detected")
 
-#cannot do number of cells per spot QC because there is no cell count col
-
 apply(cbind(qc_lib_size, qc_detected, qc_mito), 2, sum)
 
 discard <- qc_lib_size | qc_detected | qc_mito
@@ -67,9 +74,13 @@ plotQC(spe, type = "spots",
 
 spe <- spe[, !colData(spe)$qc_lib_size]
 dim(spe)
+
 ```
 
-```{r pressure}
+```{r norm}
+
+#NORMALIZATION
+
 library(scran)
 
 # calculate library size factors
@@ -88,10 +99,12 @@ dim(logcounts(spe))
 
 ```{r hvgs}
 
+#FEATURE SELECTION
+
 # fit mean-variance relationship
 dec <- modelGeneVar(spe)
 
-# remove mitochondrial genes
+# remove 13 mitochondrial genes
 spe <- spe[!is_mito, ]
 dim(spe)
 
@@ -107,6 +120,45 @@ length(top_hvgs) #1300
 ```
 
 
+```{r pca}
+
+#DIMENSIONALITY REDUCTION
+
+# compute PCA
+set.seed(123)
+top_hvgs_indices <- which(rownames(rowData(spe)) %in% top_hvgs)
+
+spe <- runPCA(spe, subset_row = top_hvgs_indices)
+
+reducedDimNames(spe)
+dim(reducedDim(spe, "PCA"))
+
+```
+
+```{r clust}
+
+#CLUSTERING
+
+# graph-based clustering
+set.seed(123)
+k <- 10
+g <- buildSNNGraph(spe, k = k, use.dimred = "PCA")
+g_walk <- igraph::cluster_walktrap(g)
+clus <- g_walk$membership
+table(clus)
+
+# store cluster labels in column 'label' in colData
+colLabels(spe) <- factor(clus)
+
+# plot clusters in spatial x-y coordinates
+plotSpots(spe, annotate = "label", 
+          palette = "libd_layer_colors")
+
+# plot clusters in PCA reduced dimensions
+plotDimRed(spe, type = "PCA", 
+           annotate = "label", palette = "libd_layer_colors")
+
+```
 
 
 

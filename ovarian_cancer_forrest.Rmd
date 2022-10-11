@@ -161,4 +161,78 @@ plotDimRed(spe, type = "PCA",
 ```
 
 
+```{r clust2}
+
+#CLUSTERING 2 bayesspace
+#https://edward130603.github.io/BayesSpace/articles/BayesSpace.html
+
+library(SingleCellExperiment)
+library(ggplot2)
+library(BayesSpace)
+
+sce <- readVisium("/users/kshah/ovarian_cancer_forrest/outs")
+
+set.seed(102)
+sce <- spatialPreprocess(sce, platform="ST", 
+                              n.PCs=50, n.HVGs=1300, log.normalize=TRUE)
+
+sce <- qTune(sce, qs=seq(2, 10), platform="ST", d=7)
+qPlot(sce)
+
+
+# do clustering on JHPCE and save it in .rds file
+#set.seed(149)
+#sce <- spatialCluster(sce, q=4, platform="ST", d=7,
+#                           init.method="mclust", model="t", gamma=2,
+#                           nrep=10000, burn.in=1000,
+#                           save.chain=TRUE)
+
+sce <- readRDS(here("sce_ovarian_cancer_sample01_bayesspace.rds"))
+clusterPlot(sce)
+
+```
+
+
+```{r clust3}
+
+#CLUSTERING 3 precast
+#https://feiyoung.github.io/PRECAST/articles/PRECAST.BreastCancer.html
+
+## Create PRECASTObject.
+library(PRECAST)
+library(Seurat)
+
+(spe <- read10xVisium("/users/kshah/ovarian_cancer_forrest/outs/",
+  type = "sparse",   # use sparse (not HDF5) format
+  data = "filtered",      # read all (not filtered) data
+  images = "lowres", # specify which image(s) to include
+  load = TRUE))      # specify whether or not to load image(s)
+
+#didn't work to create precast obj from the ovarian cancer data, checking to see that it works from dlpfc data
+
+#spe <- Visium_humanDLPFC()
+
+#use boyi code to convert spe to seurat
+spe_seu <- CreateSeuratObject(
+    counts=assays(spe)$counts,
+    meta.data=data.frame(
+      row=spatialCoords(spe)[,1],
+      col=spatialCoords(spe)[,2])
+      #spot_id = colData(spe_sub)$spot_id        error
+  )
+spe_seu
+
+set.seed(2022)
+PRECASTObj <- CreatePRECASTObject(spe_seu) #error
+
+PRECASTObj <-  AddAdjList(PRECASTObj, platform = "Visium")
+PRECASTObj <- AddParSetting(PRECASTObj, Sigma_equal=FALSE, maxIter=30, verbose=TRUE)
+
+
+```
+
+
+
+
+
 

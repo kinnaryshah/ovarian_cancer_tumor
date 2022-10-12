@@ -232,7 +232,48 @@ PRECASTObj <- AddParSetting(PRECASTObj, Sigma_equal=FALSE, maxIter=30, verbose=T
 ```
 
 
+```{r clust4}
 
+#CLUSTERING 4 deepST formatting
+
+library(DropletUtils)
+library(Matrix)
+ 
+#https://support.10xgenomics.com/spatial-gene-expression/software/pipelines/latest/output/matrices
+# set the different file paths of the filtered matrix
+matrix_dir = "/users/kshah/ovarian_cancer_forrest/outs/filtered_feature_bc_matrix/"
+barcode.path <- paste0(matrix_dir, "barcodes.tsv.gz")
+features.path <- paste0(matrix_dir, "features.tsv.gz")
+matrix.path <- paste0(matrix_dir, "matrix.mtx.gz")
+ 
+# load the matrix.mtx.gz
+mat_filtered <- readMM(file = matrix.path)
+ 
+# load the feature.tsv.gz
+feature.names = read.delim(features.path,
+                           header = FALSE,
+                           stringsAsFactors = FALSE)
+ 
+# load the barcodes.tsv.gz
+barcode.names = read.delim(barcode.path,
+                           header = FALSE,
+                           stringsAsFactors = FALSE)
+ 
+# set the matrix column and row names                         
+colnames(mat_filtered) = barcode.names$V1
+rownames(mat_filtered) = feature.names$V1
+
+
+write10xCounts(path = "/users/kshah/ovarian_cancer_forrest/outs/filtered_feature_bc_matrix.h5",
+               x = mat_filtered,
+               type = "HDF5",
+               gene.id = unlist(feature.names[1]),
+               gene.symbol = unlist(feature.names[2]),
+               barcodes = unlist(barcode.names),
+               library.ids = rep("random_input", 33538),
+               overwrite = TRUE)
+
+```
 
 
 

@@ -198,38 +198,88 @@ clusterPlot(sce)
 #CLUSTERING 3 precast
 #https://feiyoung.github.io/PRECAST/articles/PRECAST.BreastCancer.html
 
-## Create PRECASTObject.
-library(PRECAST)
-library(Seurat)
 
-(spe <- read10xVisium("/users/kshah/ovarian_cancer_forrest/outs/",
-  type = "sparse",   # use sparse (not HDF5) format
-  data = "filtered",      # read all (not filtered) data
-  images = "lowres", # specify which image(s) to include
-  load = TRUE))      # specify whether or not to load image(s)
-
-#didn't work to create precast obj from the ovarian cancer data, checking to see that it works from dlpfc data
-
-#spe <- Visium_humanDLPFC()
-
-#use boyi code to convert spe to seurat
-spe_seu <- CreateSeuratObject(
+# One sample
+spe_to_seurat <- function(spe){
+  
+  # Get the log normalization
+  
+  # browser()
+  # Find assay
+  
+  ret <- CreateSeuratObject(
     counts=assays(spe)$counts,
     meta.data=data.frame(
       row=spatialCoords(spe)[,1],
-      col=spatialCoords(spe)[,2])
-      #spot_id = colData(spe_sub)$spot_id        error
+      col=spatialCoords(spe)[,2]),
+      spot_id = colData(spe_sub)$spot_id
   )
-spe_seu
+  
+  return(ret)
+  
+  
+}
 
-set.seed(2022)
-PRECASTObj <- CreatePRECASTObject(spe_seu) #error
 
-PRECASTObj <-  AddAdjList(PRECASTObj, platform = "Visium")
-PRECASTObj <- AddParSetting(PRECASTObj, Sigma_equal=FALSE, maxIter=30, verbose=TRUE)
+# Multiple sample
+spe_to_seuratList <- function(spe){
+  uniq_sample_id <- colData(spe)$sample_id |> unique()
+  
+  # Create a seurate object for each unique sample_id
+  map(uniq_sample_id,
+      .f = function(smp_id, spe){
+        # browser()
+        ret_spe <- spe[, colData(spe)$sample_id == smp_id]
+        ret_seurat <- spe_to_seurat(ret_spe)
+        
+        return(ret_seurat)
+      },
+      spe = spe)
+}
 
+
+library(dplyr)
+library(purrr)
+library(Seurat)
+library(SpatialExperiment)
+library(PRECAST)
+
+spe_sub <- read10xVisium("/users/kshah/ovarian_cancer_forrest/outs/",
+  type = "sparse",   # use sparse (not HDF5) format
+  data = "filtered",      # read all (not filtered) data
+  images = "lowres", # specify which image(s) to include
+  load = TRUE)     # specify whether or not to load image(s)
+
+#use Boyi's code from https://github.com/boyiguo1/SRT_HPC_PRECAST/blob/master/R/example_script_of_PRECAST_pipeline.R
+# SPE to SeuRat -----------------------------------------------------------
+seuList <- spe_sub |> spe_to_seuratList()
+
+# PRECAST -----------------------------------------------------------------
+
+preobj <- CreatePRECASTObject(seuList = seuList)
+preobj@seulist
+
+
+PRECASTObj <- AddAdjList(preobj, platform = "Visium")
+## Add a model setting in advance for a PRECASTObj object. verbose =TRUE helps outputing the
+## information in the algorithm.
+PRECASTObj <- AddParSetting(PRECASTObj, Sigma_equal = FALSE, coreNum = 1, maxIter = 30, verbose = TRUE)
+
+PRECASTObj <- PRECAST(PRECASTObj, K = 15)
+resList <- PRECASTObj@resList
+PRECASTObj <- selectModel(PRECASTObj)
+
+seuInt <- IntegrateSpaData(PRECASTObj, species = "Human")
+seuInt
+
+p_sp1 <- SpaPlot(seuInt, item = "cluster", point_size = 3, combine = F)[[1]] + cowplot::theme_cowplot() +
+  ggplot2::ggtitle(paste0("PRECAST")) + ggplot2::xlab("row") + ggplot2::ylab("col")
+seuInt <- AddTSNE(seuInt, n_comp = 2)
+p_tsne <- dimPlot(seuInt, item = "cluster")
+p_tsne <- p_tsne + cowplot::theme_cowplot() + ggplot2::ggtitle("PRECAST")
 
 ```
+
 
 
 ```{r clust4}

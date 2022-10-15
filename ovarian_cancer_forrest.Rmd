@@ -36,44 +36,44 @@ head(spatialCoords(spe))
 
 #QUALITY CONTROL
 
-plotSpots(spe)
+#plotSpots(spe)
 
 is_mito <- grepl("(^MT-)|(^mt-)", rowData(spe)$symbol)
-table(is_mito)
-rowData(spe)$symbol[is_mito]
+#table(is_mito)
+#rowData(spe)$symbol[is_mito]
 spe <- addPerCellQC(spe, subsets = list(mito = is_mito))
-head(colData(spe))
-hist(colData(spe)$subsets_mito_percent, breaks = 20)
+#head(colData(spe))
+#hist(colData(spe)$subsets_mito_percent, breaks = 20)
 qc_mito <- colData(spe)$subsets_mito_percent > 28 #none
-table(qc_mito)
+#table(qc_mito)
 
-hist(colData(spe)$sum, breaks = 20)
+#hist(colData(spe)$sum, breaks = 20)
 
 qc_lib_size <- colData(spe)$sum < 600
-table(qc_lib_size)
+#table(qc_lib_size)
 colData(spe)$qc_lib_size <- qc_lib_size
-plotQC(spe, type = "spots", 
-       discard = "qc_lib_size")
+#plotQC(spe, type = "spots", 
+#       discard = "qc_lib_size")
 
-hist(colData(spe)$detected, breaks = 20)
+#hist(colData(spe)$detected, breaks = 20)
 qc_detected <- colData(spe)$detected < 400
-table(qc_detected)
+#table(qc_detected)
 colData(spe)$qc_detected <- qc_detected
-plotQC(spe, type = "spots", 
-       discard = "qc_detected")
+#plotQC(spe, type = "spots", 
+#       discard = "qc_detected")
 
 apply(cbind(qc_lib_size, qc_detected, qc_mito), 2, sum)
 
 discard <- qc_lib_size | qc_detected | qc_mito
-table(discard)
+#table(discard)
 
-plotQC(spe, type = "spots", 
-       discard = "discard")
+#plotQC(spe, type = "spots", 
+#       discard = "discard")
 
 #spe <- spe[, !colData(spe)$discard] this does not work for some reason, but the genes are the same for lib size and detected, so i just removed them
 
 spe <- spe[, !colData(spe)$qc_lib_size]
-dim(spe)
+#dim(spe)
 
 ```
 
@@ -85,15 +85,15 @@ library(scran)
 
 # calculate library size factors
 spe <- computeLibraryFactors(spe)
-summary(sizeFactors(spe))
-hist(sizeFactors(spe), breaks = 20)
+#summary(sizeFactors(spe))
+#hist(sizeFactors(spe), breaks = 20)
 
 # calculate logcounts and store in object
 spe <- logNormCounts(spe)
 
 # check
-assayNames(spe)
-dim(logcounts(spe))
+#assayNames(spe)
+#dim(logcounts(spe))
 ```
 
 
@@ -110,13 +110,13 @@ dim(spe)
 
 # visualize mean-variance relationship
 fit <- metadata(dec)
-plot(fit$mean, fit$var, 
-     xlab = "mean of log-expression", ylab = "variance of log-expression")
-curve(fit$trend(x), col = "dodgerblue", add = TRUE, lwd = 2)
+#plot(fit$mean, fit$var, 
+#     xlab = "mean of log-expression", ylab = "variance of log-expression")
+#curve(fit$trend(x), col = "dodgerblue", add = TRUE, lwd = 2)
 
 # select top HVGs
 top_hvgs <- getTopHVGs(dec, prop = 0.1)
-length(top_hvgs) #1300 
+#length(top_hvgs) #1300 
 ```
 
 
@@ -133,11 +133,18 @@ spe <- runPCA(spe, subset_row = top_hvgs_indices)
 reducedDimNames(spe)
 dim(reducedDim(spe, "PCA"))
 
+library(here)
+fn <- here("ovarian_cancer_sample01_preprocessed.rds")
+saveRDS(spe, file = fn)
+
 ```
 
-```{r clust}
+```{r clust1}
 
-#CLUSTERING
+#CLUSTERING 1 graph-based
+
+spe <- readRDS(here("ovarian_cancer_sample01_preprocessed.rds"))
+#plotDimRed(spe, type = "PCA")
 
 # graph-based clustering
 set.seed(123)
@@ -172,20 +179,20 @@ library(BayesSpace)
 
 sce <- readVisium("/users/kshah/ovarian_cancer_forrest/outs")
 
-set.seed(102)
-sce <- spatialPreprocess(sce, platform="ST", 
+set.seed(123)
+sce <- spatialPreprocess(sce, platform="Visium", #i was using platform ST instead LOL
                               n.PCs=50, n.HVGs=1300, log.normalize=TRUE)
 
-sce <- qTune(sce, qs=seq(2, 10), platform="ST", d=7)
+sce <- qTune(sce, qs=seq(2, 10), platform="Visium", d=7)
 qPlot(sce)
 
 
 # do clustering on JHPCE and save it in .rds file
-#set.seed(149)
-#sce <- spatialCluster(sce, q=4, platform="ST", d=7,
-#                           init.method="mclust", model="t", gamma=2,
-#                           nrep=10000, burn.in=1000,
-#                           save.chain=TRUE)
+set.seed(149)
+sce <- spatialCluster(sce, q=6, platform="Visium", d=50,
+                           init.method="mclust", model="t", gamma=2,
+                           nrep=10000, burn.in=1000,
+                           save.chain=TRUE)
 
 sce <- readRDS(here("sce_ovarian_cancer_sample01_bayesspace.rds"))
 clusterPlot(sce)
@@ -281,7 +288,6 @@ p_tsne <- p_tsne + cowplot::theme_cowplot() + ggplot2::ggtitle("PRECAST")
 ```
 
 
-
 ```{r clust4}
 
 #CLUSTERING 4 deepST formatting
@@ -324,6 +330,3 @@ write10xCounts(path = "/users/kshah/ovarian_cancer_forrest/outs/filtered_feature
                overwrite = TRUE)
 
 ```
-
-
-
